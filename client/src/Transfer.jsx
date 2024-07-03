@@ -1,23 +1,44 @@
 import { useState } from "react";
 import server from "./server";
+import { getPublicKey, getTxSignature } from "./scripts/crypto";
 
-function Transfer({ address, setBalance }) {
+function Transfer({
+  publicKey,
+  setPublicKey,
+  privateKey,
+  setPrivateKey,
+  setBalance,
+}) {
   const [sendAmount, setSendAmount] = useState("");
   const [recipient, setRecipient] = useState("");
 
   const setValue = (setter) => (evt) => setter(evt.target.value);
 
+  async function onChange(evt) {
+    const privateKey = evt.target.value;
+    setPrivateKey(privateKey);
+    const publicKey = await getPublicKey(privateKey);
+    setPublicKey(publicKey);
+  }
+
   async function transfer(evt) {
     evt.preventDefault();
+
+    const amount = parseInt(sendAmount);
+    const txSignature = await getTxSignature(privateKey, recipient, amount);
+    const payload = {
+      sender: publicKey,
+      recipient,
+      amount,
+      signature: JSON.stringify(txSignature, (_, value) =>
+        typeof value === "bigint" ? value.toString() : value
+      ),
+    };
 
     try {
       const {
         data: { balance },
-      } = await server.post(`send`, {
-        sender: address,
-        amount: parseInt(sendAmount),
-        recipient,
-      });
+      } = await server.post(`send`, payload);
       setBalance(balance);
     } catch (ex) {
       alert(ex.response.data.message);
@@ -29,6 +50,15 @@ function Transfer({ address, setBalance }) {
       <h1>Send Transaction</h1>
 
       <label>
+        Recipient
+        <input
+          placeholder="Type an address, for example: 0x2"
+          value={recipient}
+          onChange={setValue(setRecipient)}
+        ></input>
+      </label>
+
+      <label>
         Send Amount
         <input
           placeholder="1, 2, 3..."
@@ -38,11 +68,11 @@ function Transfer({ address, setBalance }) {
       </label>
 
       <label>
-        Recipient
+        Private key
         <input
-          placeholder="Type an address, for example: 0x2"
-          value={recipient}
-          onChange={setValue(setRecipient)}
+          placeholder="Type a private key"
+          value={privateKey}
+          onChange={onChange}
         ></input>
       </label>
 
